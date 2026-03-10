@@ -569,9 +569,9 @@
 
   /* FLASHCARDS */
   .flashcards-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
   .flashcard {
@@ -579,36 +579,27 @@
     border-radius: 14px;
     border: 1.5px solid var(--border);
     overflow: hidden;
+    width: 100%;
   }
 
   .flashcard-front {
     display: block;
     background: var(--card);
-    padding: 20px;
-    border-radius: 14px;
+    padding: 20px 24px;
+    transform: none !important;
   }
 
   .flashcard-back {
     display: none;
     background: var(--ink);
     color: var(--paper);
-    padding: 20px;
-    border-radius: 14px;
+    padding: 20px 24px;
+    transform: none !important;
   }
 
   .flashcard.flipped .flashcard-front { display: none; }
   .flashcard.flipped .flashcard-back { display: block; }
 
-  .flashcard-front {
-    background: var(--card);
-  }
-
-  .flashcard-back {
-    background: var(--ink);
-    color: var(--paper);
-    transform: rotateY(180deg);
-    border-color: var(--ink);
-  }
 
   .fc-label {
     font-size: 0.65rem;
