@@ -1059,7 +1059,7 @@
       4. Paste it below — it's completely free ✓
     </div>
     <div class="key-input-wrap">
-      <input type="password" class="key-input" id="apiKeyInput" placeholder="apikey..." onkeydown="if(event.key==='Enter')saveKey()" />
+      <input type="password" class="key-input" id="apiKeyInput" placeholder="AIza..." onkeydown="if(event.key==='Enter')saveKey()" />
       <button class="key-submit-btn" onclick="saveKey()">Start →</button>
     </div>
     <div class="key-error" id="keyError">Please enter a valid Gemini API key (starts with AIza...)</div>
@@ -1072,7 +1072,10 @@
     <span class="logo-dot"></span>
     Notus
   </div>
-  
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span class="key-badge active" id="keyBadge" onclick="changeKey()" title="Click to change API key">🔑 Gemini Connected</span>
+    <span class="header-tag">AI Study Assistant</span>
+  </div>
 </header>
 
 <div class="app-container">
