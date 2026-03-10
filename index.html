@@ -1241,8 +1241,9 @@ async function callAI(prompt) {
     body: JSON.stringify({
       model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 4000,
-      temperature: 0.4
+      max_tokens: 8000,
+      temperature: 0.4,
+      response_format: { type: 'json_object' }
     })
   });
   const data = await res.json();
@@ -1370,58 +1371,99 @@ async function generateNotes() {
   const loadingWrap = document.getElementById('loadingWrap');
   loadingWrap.classList.add('active');
 
-  // Animate steps
   const steps = ['step1','step2','step3','step4','step5'];
   steps.forEach((id, i) => {
     setTimeout(() => document.getElementById(id).classList.add('done'), 800 + i * 600);
   });
 
-  const prompt = extractedText
-    ? `You are an expert academic tutor. Analyze this extracted text from a student's PDF document and create comprehensive study notes.
+  const sourceLabel = extractedText ? 'the uploaded document' : `the topic: ${topic}`;
 
-DOCUMENT TEXT:
-${content.substring(0, 6000)}
+  const prompt = `You are an expert academic tutor creating DETAILED, THOROUGH study notes for a university student.
 
-Generate a complete JSON response with this EXACT structure:
+${extractedText ? 'DOCUMENT TEXT:\n' + content.substring(0, 7000) : 'TOPIC: ' + topic}
+
+CRITICAL RULES:
+- Every field must be DETAILED and THOROUGH — not short summaries
+- summary: write at least 4-5 full sentences covering the topic comprehensively
+- keyPoints: write at least 6-8 points, each a complete 1-2 sentence explanation (NOT one-liners)
+- definitions: include at least 5-6 terms with detailed multi-sentence definitions
+- formulas: include all relevant formulas/rules/principles with full explanations
+- examples: write 3-4 detailed, real-world examples with full context
+- simplified: write 5-6 sentences explaining the whole topic like a fun story for a 12 year old using everyday analogies
+- flashcards: create exactly 8 flashcards with detailed answers (2-3 sentences each)
+- examTopics: list 5-6 topics with detailed explanations of why each is important
+- suggestedQuestions: write 4-5 deep questions a professor might ask
+
+Respond with ONLY valid JSON. No markdown, no backticks, no explanation outside the JSON. Use this exact structure:
 {
-  "title": "Document/Topic Title",
-  "summary": "2-3 sentence overview of the main content",
-  "keyPoints": ["point 1", "point 2", "point 3", "point 4", "point 5"],
-  "definitions": [{"term": "term1", "meaning": "clear definition"}, {"term": "term2", "meaning": "clear definition"}, {"term": "term3", "meaning": "clear definition"}],
-  "formulas": [{"label": "Formula Name", "formula": "the formula or rule", "explanation": "what it means"}],
-  "examples": ["concrete example 1", "concrete example 2"],
-  "simplified": "Explain the ENTIRE topic as if to a 12 year old in 3-4 simple sentences using everyday analogies",
-  "flashcards": [{"q": "question", "a": "answer"}, {"q": "question2", "a": "answer2"}, {"q": "question3", "a": "answer3"}, {"q": "question4", "a": "answer4"}, {"q": "question5", "a": "answer5"}, {"q": "question6", "a": "answer6"}],
-  "examTopics": [{"topic": "Most important topic", "detail": "Why this is crucial for exams", "priority": "high"}, {"topic": "Second topic", "detail": "Why this matters", "priority": "high"}, {"topic": "Third topic", "detail": "Supporting concept", "priority": "medium"}, {"topic": "Fourth topic", "detail": "Good to know", "priority": "medium"}, {"topic": "Fifth topic", "detail": "Background info", "priority": "low"}],
-  "suggestedQuestions": ["What is the main purpose of...?", "How does X relate to Y?", "Explain the key difference between..."]
-}`
-    : `You are an expert academic tutor. Create comprehensive study notes on: "${topic}"
-
-Generate a complete JSON response with this EXACT structure:
-{
-  "title": "${topic}",
-  "summary": "2-3 sentence overview",
-  "keyPoints": ["point 1", "point 2", "point 3", "point 4", "point 5"],
-  "definitions": [{"term": "term1", "meaning": "clear definition"}, {"term": "term2", "meaning": "definition"}, {"term": "term3", "meaning": "definition"}],
-  "formulas": [{"label": "Formula or Rule Name", "formula": "the formula", "explanation": "what it means"}],
-  "examples": ["concrete example 1", "concrete example 2"],
-  "simplified": "Explain the ENTIRE topic as if to a 12 year old in 3-4 simple sentences using everyday analogies",
-  "flashcards": [{"q": "question", "a": "answer"}, {"q": "question2", "a": "answer2"}, {"q": "question3", "a": "answer3"}, {"q": "question4", "a": "answer4"}, {"q": "question5", "a": "answer5"}, {"q": "question6", "a": "answer6"}],
-  "examTopics": [{"topic": "Most important topic", "detail": "Why this is crucial", "priority": "high"}, {"topic": "Second topic", "detail": "Why this matters", "priority": "high"}, {"topic": "Third topic", "detail": "Supporting concept", "priority": "medium"}, {"topic": "Fourth topic", "detail": "Good to know", "priority": "medium"}, {"topic": "Fifth topic", "detail": "Background info", "priority": "low"}],
-  "suggestedQuestions": ["What is...?", "How does...?", "Explain the difference..."]
-}
-
-Respond with ONLY the JSON, no markdown backticks.`;
+  "title": "Full descriptive title for ${sourceLabel}",
+  "summary": "Detailed 4-5 sentence summary covering all main ideas, context, and significance...",
+  "keyPoints": [
+    "First key concept explained in full detail with context and why it matters...",
+    "Second key concept with thorough explanation...",
+    "Third concept...",
+    "Fourth concept...",
+    "Fifth concept...",
+    "Sixth concept..."
+  ],
+  "definitions": [
+    {"term": "Term One", "meaning": "Detailed definition with at least 2 sentences explaining the concept, its origin, and how it is used..."},
+    {"term": "Term Two", "meaning": "Detailed definition..."},
+    {"term": "Term Three", "meaning": "Detailed definition..."},
+    {"term": "Term Four", "meaning": "Detailed definition..."},
+    {"term": "Term Five", "meaning": "Detailed definition..."}
+  ],
+  "formulas": [
+    {"label": "Formula or Principle Name", "formula": "The actual formula, rule, or principle", "explanation": "Detailed explanation of what each part means and when to apply it..."},
+    {"label": "Second Formula", "formula": "formula here", "explanation": "explanation here..."}
+  ],
+  "examples": [
+    "Detailed real-world example 1 with full context explaining how the concept applies...",
+    "Detailed real-world example 2...",
+    "Detailed real-world example 3..."
+  ],
+  "simplified": "Imagine you are explaining this to a curious 12-year-old... write 5-6 fun sentences using everyday analogies and simple language that makes the topic click.",
+  "flashcards": [
+    {"q": "Detailed question 1?", "a": "Thorough answer in 2-3 sentences with enough detail to actually learn from..."},
+    {"q": "Question 2?", "a": "Answer..."},
+    {"q": "Question 3?", "a": "Answer..."},
+    {"q": "Question 4?", "a": "Answer..."},
+    {"q": "Question 5?", "a": "Answer..."},
+    {"q": "Question 6?", "a": "Answer..."},
+    {"q": "Question 7?", "a": "Answer..."},
+    {"q": "Question 8?", "a": "Answer..."}
+  ],
+  "examTopics": [
+    {"topic": "Most important exam topic", "detail": "Detailed explanation of why this is heavily tested and what students must know about it...", "priority": "high"},
+    {"topic": "Second exam topic", "detail": "Detailed reason...", "priority": "high"},
+    {"topic": "Third exam topic", "detail": "Detailed reason...", "priority": "medium"},
+    {"topic": "Fourth exam topic", "detail": "Detailed reason...", "priority": "medium"},
+    {"topic": "Fifth exam topic", "detail": "Detailed reason...", "priority": "low"}
+  ],
+  "suggestedQuestions": [
+    "Deep conceptual question 1 that requires understanding not memorization?",
+    "Deep question 2?",
+    "Deep question 3?",
+    "Deep question 4?"
+  ]
+}`;
 
   try {
     const raw_text = await callAI(prompt);
-    let raw = raw_text.replace(/```json|```/g, '').trim();
 
-    // Attempt to fix truncated JSON by closing open structures
+    // Strip markdown code fences if any
+    let raw = raw_text.replace(/^[\s\S]*?(\{)/,'$1').replace(/\}[\s\S]*$/,'}').trim();
+
+    // If that didn't work, try simpler strip
+    if (!raw.startsWith('{')) {
+      raw = raw_text.replace(/```json|```/g, '').trim();
+    }
+
     let notes;
     try {
       notes = JSON.parse(raw);
     } catch(parseErr) {
+      // Salvage truncated JSON
       const lastBrace = raw.lastIndexOf('}');
       if (lastBrace > 0) {
         let trimmed = raw.substring(0, lastBrace + 1);
@@ -1429,9 +1471,13 @@ Respond with ONLY the JSON, no markdown backticks.`;
         const openBraces = (trimmed.match(/\{/g)||[]).length - (trimmed.match(/\}/g)||[]).length;
         for (let i = 0; i < opens; i++) trimmed += ']';
         for (let i = 0; i < openBraces; i++) trimmed += '}';
-        notes = JSON.parse(trimmed);
+        try {
+          notes = JSON.parse(trimmed);
+        } catch(e2) {
+          throw new Error('Could not parse AI response. Please try again. (Detail: ' + parseErr.message + ')');
+        }
       } else {
-        throw parseErr;
+        throw new Error('AI returned an unexpected format. Please try again.');
       }
     }
     currentNotes = notes;
