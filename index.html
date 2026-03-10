@@ -1050,19 +1050,19 @@
 <div id="apiKeyGate">
   <div class="key-card">
     <div class="logo"><span class="logo-dot"></span>Notus</div>
-    <h2>Enter your Gemini API Key</h2>
-    <p>Notus uses Google Gemini to generate smart notes. Your key is stored only in your browser — never sent anywhere else.</p>
+    <h2>Enter your Groq API Key</h2>
+    <p>Notus uses Groq (Llama 3.3) to generate smart notes. Your key is stored only in your browser — never sent anywhere else.</p>
     <div class="key-steps">
-      1. Go to <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a><br>
-      2. Sign in with your Google account<br>
+      1. Go to <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a><br>
+      2. Sign up free with email (no credit card needed)<br>
       3. Click <strong>"Create API Key"</strong> → copy it<br>
-      4. Paste it below — it's completely free ✓
+      4. Paste it below — completely free, super fast ✓
     </div>
     <div class="key-input-wrap">
-      <input type="password" class="key-input" id="apiKeyInput" placeholder="AIza..." onkeydown="if(event.key==='Enter')saveKey()" />
+      <input type="password" class="key-input" id="apiKeyInput" placeholder="gsk_..." onkeydown="if(event.key==='Enter')saveKey()" />
       <button class="key-submit-btn" onclick="saveKey()">Start →</button>
     </div>
-    <div class="key-error" id="keyError">Please enter a valid Gemini API key (starts with AIza...)</div>
+    <div class="key-error" id="keyError">Please enter a valid Groq API key (starts with gsk_...)</div>
     <div class="key-privacy">🔒 Your key is saved in localStorage and never leaves your device.</div>
   </div>
 </div>
@@ -1073,7 +1073,7 @@
     Notus
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
-    <span class="key-badge active" id="keyBadge" onclick="changeKey()" title="Click to change API key">🔑 Gemini Connected</span>
+    <span class="key-badge active" id="keyBadge" onclick="changeKey()" title="Click to change API key">🔑 Groq Connected</span>
     <span class="header-tag">AI Study Assistant</span>
   </div>
 </header>
@@ -1197,7 +1197,7 @@ let GEMINI_KEY = '';
 
 // ── KEY GATE ──────────────────────────────────────────
 function initKeyGate() {
-  const saved = localStorage.getItem('notus_gemini_key');
+  const saved = localStorage.getItem('notus_groq_key');
   if (saved) {
     GEMINI_KEY = saved;
     document.getElementById('apiKeyGate').style.display = 'none';
@@ -1210,39 +1210,44 @@ function initKeyGate() {
 function saveKey() {
   const val = document.getElementById('apiKeyInput').value.trim();
   const err = document.getElementById('keyError');
-  if (!val || !val.startsWith('AIza')) {
+  if (!val || !val.startsWith('gsk_')) {
     err.classList.add('active');
     return;
   }
   err.classList.remove('active');
   GEMINI_KEY = val;
-  localStorage.setItem('notus_gemini_key', val);
+  localStorage.setItem('notus_groq_key', val);
   document.getElementById('apiKeyGate').style.display = 'none';
   document.getElementById('keyBadge').classList.add('active');
 }
 
 function changeKey() {
-  if (!confirm('Change your Gemini API key?')) return;
-  localStorage.removeItem('notus_gemini_key');
+  if (!confirm('Change your Groq API key?')) return;
+  localStorage.removeItem('notus_groq_key');
   GEMINI_KEY = '';
   document.getElementById('apiKeyInput').value = '';
   document.getElementById('apiKeyGate').style.display = 'flex';
   document.getElementById('keyBadge').classList.remove('active');
 }
 
-async function callGemini(prompt) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
+async function callAI(prompt) {
+  const url = `https://api.groq.com/openai/v1/chat/completions`;
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${GEMINI_KEY}`
+    },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 4000, temperature: 0.4 }
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 4000,
+      temperature: 0.4
     })
   });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return data.choices?.[0]?.message?.content || '';
 }
 
 initKeyGate();
@@ -1409,7 +1414,7 @@ Generate a complete JSON response with this EXACT structure:
 Respond with ONLY the JSON, no markdown backticks.`;
 
   try {
-    const raw_text = await callGemini(prompt);
+    const raw_text = await callAI(prompt);
     let raw = raw_text.replace(/```json|```/g, '').trim();
 
     // Attempt to fix truncated JSON by closing open structures
@@ -1585,7 +1590,7 @@ async function sendChat() {
 
   try {
     const chatPrompt = `You are a helpful study assistant. ${context}\n\nStudent question: ${msg}\n\nAnswer clearly and concisely, in 2-4 sentences unless more detail is needed.`;
-    const reply = await callGemini(chatPrompt);
+    const reply = await callAI(chatPrompt);
     document.getElementById('aiTyping').innerHTML = `<strong>Notus AI</strong>${reply}`;
   } catch (err) {
     document.getElementById('aiTyping').innerHTML = `<strong>Notus AI</strong>Sorry, I couldn't process that. ${err.message || 'Please try again.'}`;
