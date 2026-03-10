@@ -1230,25 +1230,42 @@ function changeKey() {
   document.getElementById('keyBadge').classList.remove('active');
 }
 
-async function callAI(prompt) {
+async function callAI(prompt, jsonMode = true) {
   const url = `https://api.groq.com/openai/v1/chat/completions`;
+  const body = {
+    model: 'llama-3.3-70b-versatile',
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 4000,
+    temperature: 0.5
+  };
+  if (jsonMode) body.response_format = { type: 'json_object' };
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${GEMINI_KEY}`
-    },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 8000,
-      temperature: 0.4,
-      response_format: { type: 'json_object' }
-    })
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GEMINI_KEY}` },
+    body: JSON.stringify(body)
   });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
   return data.choices?.[0]?.message?.content || '';
+}
+
+function parseJSON(raw) {
+  let text = raw.replace(/```json|```/g, '').trim();
+  // grab first { ... last }
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start !== -1 && end !== -1) text = text.substring(start, end + 1);
+  try { return JSON.parse(text); } catch(e) {
+    // try to close unclosed structures
+    const opens = (text.match(/\[/g)||[]).length - (text.match(/\]/g)||[]).length;
+    const braces = (text.match(/\{/g)||[]).length - (text.match(/\}/g)||[]).length;
+    // remove last incomplete string value
+    text = text.replace(/,\s*"[^"]*":\s*"[^"]*$/, '');
+    text = text.replace(/,\s*"[^"]*":\s*\[[^\]]*$/, ']');
+    for (let i = 0; i < opens; i++) text += ']';
+    for (let i = 0; i < braces; i++) text += '}';
+    return JSON.parse(text);
+  }
 }
 
 initKeyGate();
@@ -1299,9 +1316,7 @@ async function handlePDF(file) {
       }
       extractedText = fullText;
       setFileLoaded(file, `${pdf.numPages} pages extracted`);
-    } catch(err) {
-      alert('Could not read PDF: ' + err.message);
-    }
+    } catch(err) { alert('Could not read PDF: ' + err.message); }
   };
   reader.readAsArrayBuffer(file);
 }
@@ -1314,9 +1329,7 @@ async function handleDOCX(file) {
       extractedText = result.value;
       const wordCount = extractedText.split(/\s+/).filter(Boolean).length;
       setFileLoaded(file, `~${wordCount} words extracted`);
-    } catch(err) {
-      alert('Could not read DOCX: ' + err.message);
-    }
+    } catch(err) { alert('Could not read DOCX: ' + err.message); }
   };
   reader.readAsArrayBuffer(file);
 }
@@ -1329,30 +1342,18 @@ async function handlePPTX(file) {
       let slides = [];
       const slideFiles = Object.keys(zip.files)
         .filter(f => f.match(/^ppt\/slides\/slide\d+\.xml$/))
-        .sort((a, b) => {
-          const na = parseInt(a.match(/slide(\d+)/)[1]);
-          const nb = parseInt(b.match(/slide(\d+)/)[1]);
-          return na - nb;
-        });
-
+        .sort((a, b) => parseInt(a.match(/slide(\d+)/)[1]) - parseInt(b.match(/slide(\d+)/)[1]));
       for (let i = 0; i < Math.min(slideFiles.length, 50); i++) {
         const xmlStr = await zip.files[slideFiles[i]].async('string');
-        // Extract all text runs from the slide XML
         const texts = [];
         const regex = /<a:t[^>]*>([^<]+)<\/a:t>/g;
         let match;
-        while ((match = regex.exec(xmlStr)) !== null) {
-          const txt = match[1].trim();
-          if (txt) texts.push(txt);
-        }
+        while ((match = regex.exec(xmlStr)) !== null) { const t = match[1].trim(); if (t) texts.push(t); }
         if (texts.length) slides.push(`[Slide ${i+1}]\n${texts.join(' ')}`);
       }
-
       extractedText = slides.join('\n\n');
       setFileLoaded(file, `${slideFiles.length} slides extracted`);
-    } catch(err) {
-      alert('Could not read PPTX: ' + err.message);
-    }
+    } catch(err) { alert('Could not read PPTX: ' + err.message); }
   };
   reader.readAsArrayBuffer(file);
 }
@@ -1372,114 +1373,86 @@ async function generateNotes() {
   loadingWrap.classList.add('active');
 
   const steps = ['step1','step2','step3','step4','step5'];
-  steps.forEach((id, i) => {
-    setTimeout(() => document.getElementById(id).classList.add('done'), 800 + i * 600);
-  });
+  steps.forEach((id, i) => setTimeout(() => document.getElementById(id).classList.add('done'), 800 + i * 700));
 
-  const sourceLabel = extractedText ? 'the uploaded document' : `the topic: ${topic}`;
+  const ctx = extractedText ? `DOCUMENT TEXT:\n${content.substring(0, 5000)}` : `TOPIC: ${topic}`;
 
-  const prompt = `You are an expert academic tutor creating DETAILED, THOROUGH study notes for a university student.
+  // ── CALL 1: Core notes (summary, keypoints, definitions, examples, formulas, simplified)
+  const prompt1 = `You are an expert university professor writing THOROUGH, DETAILED study notes. ${ctx}
 
-${extractedText ? 'DOCUMENT TEXT:\n' + content.substring(0, 7000) : 'TOPIC: ' + topic}
+Return ONLY a JSON object with these exact keys. Be VERY detailed — students are using this to actually study and pass exams:
 
-CRITICAL RULES:
-- Every field must be DETAILED and THOROUGH — not short summaries
-- summary: write at least 4-5 full sentences covering the topic comprehensively
-- keyPoints: write at least 6-8 points, each a complete 1-2 sentence explanation (NOT one-liners)
-- definitions: include at least 5-6 terms with detailed multi-sentence definitions
-- formulas: include all relevant formulas/rules/principles with full explanations
-- examples: write 3-4 detailed, real-world examples with full context
-- simplified: write 5-6 sentences explaining the whole topic like a fun story for a 12 year old using everyday analogies
-- flashcards: create exactly 8 flashcards with detailed answers (2-3 sentences each)
-- examTopics: list 5-6 topics with detailed explanations of why each is important
-- suggestedQuestions: write 4-5 deep questions a professor might ask
-
-Respond with ONLY valid JSON. No markdown, no backticks, no explanation outside the JSON. Use this exact structure:
 {
-  "title": "Full descriptive title for ${sourceLabel}",
-  "summary": "Detailed 4-5 sentence summary covering all main ideas, context, and significance...",
+  "title": "Clear descriptive title",
+  "summary": "Write 5-6 full sentences. Cover: what this topic is, why it matters, its main components, real-world relevance, and any historical or field context. Do NOT be vague.",
   "keyPoints": [
-    "First key concept explained in full detail with context and why it matters...",
-    "Second key concept with thorough explanation...",
-    "Third concept...",
-    "Fourth concept...",
-    "Fifth concept...",
-    "Sixth concept..."
+    "Key concept 1: Write 2-3 sentences explaining this concept fully. Include why it matters and how it connects to the broader topic.",
+    "Key concept 2: Full 2-3 sentence explanation with context...",
+    "Key concept 3: ...",
+    "Key concept 4: ...",
+    "Key concept 5: ...",
+    "Key concept 6: ...",
+    "Key concept 7: ..."
   ],
   "definitions": [
-    {"term": "Term One", "meaning": "Detailed definition with at least 2 sentences explaining the concept, its origin, and how it is used..."},
-    {"term": "Term Two", "meaning": "Detailed definition..."},
-    {"term": "Term Three", "meaning": "Detailed definition..."},
-    {"term": "Term Four", "meaning": "Detailed definition..."},
-    {"term": "Term Five", "meaning": "Detailed definition..."}
+    {"term": "Term 1", "meaning": "Write 2-3 full sentences. Define it precisely, explain its origin or context, and give an example of how it is used in practice."},
+    {"term": "Term 2", "meaning": "2-3 sentence definition with example..."},
+    {"term": "Term 3", "meaning": "..."},
+    {"term": "Term 4", "meaning": "..."},
+    {"term": "Term 5", "meaning": "..."},
+    {"term": "Term 6", "meaning": "..."}
   ],
   "formulas": [
-    {"label": "Formula or Principle Name", "formula": "The actual formula, rule, or principle", "explanation": "Detailed explanation of what each part means and when to apply it..."},
-    {"label": "Second Formula", "formula": "formula here", "explanation": "explanation here..."}
+    {"label": "Name of formula/law/principle", "formula": "The actual formula or rule written out", "explanation": "2-3 sentences: what each variable/part means, when to use it, and a concrete example of applying it."},
+    {"label": "Second formula", "formula": "...", "explanation": "..."}
   ],
   "examples": [
-    "Detailed real-world example 1 with full context explaining how the concept applies...",
-    "Detailed real-world example 2...",
-    "Detailed real-world example 3..."
+    "Example 1: Give a detailed real-world or field-specific example. Write 3-4 sentences describing the scenario, how the concept applies, and what outcome results.",
+    "Example 2: Another detailed scenario with context and outcome...",
+    "Example 3: ..."
   ],
-  "simplified": "Imagine you are explaining this to a curious 12-year-old... write 5-6 fun sentences using everyday analogies and simple language that makes the topic click.",
+  "simplified": "Write 6-7 sentences as if explaining to a curious 12-year-old using everyday objects and fun analogies. Make it memorable and engaging — use comparisons like 'imagine your computer is like a post office' etc."
+}`;
+
+  // ── CALL 2: Flashcards, exam topics, suggested questions
+  const prompt2 = `You are an expert university professor. ${ctx}
+
+Return ONLY a JSON object for exam prep materials. Be detailed and educational:
+
+{
   "flashcards": [
-    {"q": "Detailed question 1?", "a": "Thorough answer in 2-3 sentences with enough detail to actually learn from..."},
-    {"q": "Question 2?", "a": "Answer..."},
-    {"q": "Question 3?", "a": "Answer..."},
-    {"q": "Question 4?", "a": "Answer..."},
-    {"q": "Question 5?", "a": "Answer..."},
-    {"q": "Question 6?", "a": "Answer..."},
-    {"q": "Question 7?", "a": "Answer..."},
-    {"q": "Question 8?", "a": "Answer..."}
+    {"q": "A meaningful exam-style question about a key concept?", "a": "Write a thorough 3-4 sentence answer that actually teaches the concept, not just a one-liner. Include why, how, and any important nuance."},
+    {"q": "Question 2?", "a": "3-4 sentence answer..."},
+    {"q": "Question 3?", "a": "..."},
+    {"q": "Question 4?", "a": "..."},
+    {"q": "Question 5?", "a": "..."},
+    {"q": "Question 6?", "a": "..."},
+    {"q": "Question 7?", "a": "..."},
+    {"q": "Question 8?", "a": "..."}
   ],
   "examTopics": [
-    {"topic": "Most important exam topic", "detail": "Detailed explanation of why this is heavily tested and what students must know about it...", "priority": "high"},
-    {"topic": "Second exam topic", "detail": "Detailed reason...", "priority": "high"},
-    {"topic": "Third exam topic", "detail": "Detailed reason...", "priority": "medium"},
-    {"topic": "Fourth exam topic", "detail": "Detailed reason...", "priority": "medium"},
-    {"topic": "Fifth exam topic", "detail": "Detailed reason...", "priority": "low"}
+    {"topic": "Most tested topic name", "detail": "Write 2-3 sentences on exactly why professors test this, what students must deeply understand, and common mistakes to avoid.", "priority": "high"},
+    {"topic": "Second topic", "detail": "2-3 sentences...", "priority": "high"},
+    {"topic": "Third topic", "detail": "...", "priority": "medium"},
+    {"topic": "Fourth topic", "detail": "...", "priority": "medium"},
+    {"topic": "Fifth topic", "detail": "...", "priority": "low"}
   ],
   "suggestedQuestions": [
-    "Deep conceptual question 1 that requires understanding not memorization?",
-    "Deep question 2?",
-    "Deep question 3?",
-    "Deep question 4?"
+    "A deep analytical question a professor would ask on an exam?",
+    "A second question requiring real understanding?",
+    "A third question?",
+    "A fourth question?"
   ]
 }`;
 
   try {
-    const raw_text = await callAI(prompt);
+    // Run both calls in parallel
+    const [res1, res2] = await Promise.all([callAI(prompt1), callAI(prompt2)]);
 
-    // Strip markdown code fences if any
-    let raw = raw_text.replace(/^[\s\S]*?(\{)/,'$1').replace(/\}[\s\S]*$/,'}').trim();
+    const part1 = parseJSON(res1);
+    const part2 = parseJSON(res2);
 
-    // If that didn't work, try simpler strip
-    if (!raw.startsWith('{')) {
-      raw = raw_text.replace(/```json|```/g, '').trim();
-    }
-
-    let notes;
-    try {
-      notes = JSON.parse(raw);
-    } catch(parseErr) {
-      // Salvage truncated JSON
-      const lastBrace = raw.lastIndexOf('}');
-      if (lastBrace > 0) {
-        let trimmed = raw.substring(0, lastBrace + 1);
-        const opens = (trimmed.match(/\[/g)||[]).length - (trimmed.match(/\]/g)||[]).length;
-        const openBraces = (trimmed.match(/\{/g)||[]).length - (trimmed.match(/\}/g)||[]).length;
-        for (let i = 0; i < opens; i++) trimmed += ']';
-        for (let i = 0; i < openBraces; i++) trimmed += '}';
-        try {
-          notes = JSON.parse(trimmed);
-        } catch(e2) {
-          throw new Error('Could not parse AI response. Please try again. (Detail: ' + parseErr.message + ')');
-        }
-      } else {
-        throw new Error('AI returned an unexpected format. Please try again.');
-      }
-    }
+    const notes = { ...part1, ...part2 };
     currentNotes = notes;
 
     loadingWrap.classList.remove('active');
@@ -1488,7 +1461,7 @@ Respond with ONLY valid JSON. No markdown, no backticks, no explanation outside 
   } catch (err) {
     loadingWrap.classList.remove('active');
     document.getElementById('notesContainer').classList.add('active');
-    document.getElementById('notesOutput').innerHTML = `<div class="notes-card"><div class="notes-card-body"><p style="color:var(--accent)">⚠️ Something went wrong. Please check your connection and try again.<br><small>${err.message}</small></p></div></div>`;
+    document.getElementById('notesOutput').innerHTML = `<div class="notes-card"><div class="notes-card-body"><p style="color:var(--accent)">⚠️ Something went wrong. Please try again.<br><small style="opacity:0.6">${err.message}</small></p></div></div>`;
   }
 }
 
