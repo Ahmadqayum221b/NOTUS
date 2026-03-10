@@ -900,16 +900,182 @@
     .tabs-wrap { gap: 2px; }
     .tab-btn { padding: 8px 12px; font-size: 0.75rem; }
   }
+
+  /* API KEY GATE */
+  #apiKeyGate {
+    position: fixed;
+    inset: 0;
+    background: var(--paper);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .key-card {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 24px;
+    padding: 48px 44px;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.08);
+    animation: fadeUp 0.5s ease forwards;
+  }
+
+  .key-card .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.6rem;
+    letter-spacing: -0.03em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 28px;
+  }
+
+  .key-card h2 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.6rem;
+    letter-spacing: -0.03em;
+    margin-bottom: 10px;
+    line-height: 1.2;
+  }
+
+  .key-card p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.65;
+    margin-bottom: 28px;
+  }
+
+  .key-steps {
+    background: var(--cream);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 24px;
+    font-size: 0.82rem;
+    line-height: 1.9;
+    color: #3a3730;
+  }
+
+  .key-steps a {
+    color: var(--accent2);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .key-steps a:hover { text-decoration: underline; }
+
+  .key-input-wrap {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .key-input {
+    flex: 1;
+    padding: 13px 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    background: var(--paper);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.2s;
+    letter-spacing: 0.03em;
+  }
+
+  .key-input:focus { border-color: var(--accent2); }
+
+  .key-submit-btn {
+    padding: 13px 22px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    border-radius: 10px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .key-submit-btn:hover { background: var(--accent); }
+
+  .key-error {
+    display: none;
+    color: var(--accent);
+    font-size: 0.8rem;
+    margin-top: 6px;
+  }
+
+  .key-error.active { display: block; }
+
+  .key-privacy {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  /* KEY INDICATOR IN HEADER */
+  .key-badge {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--accent3);
+    font-weight: 500;
+    padding: 5px 12px;
+    border: 1px solid rgba(42,171,122,0.3);
+    border-radius: 100px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .key-badge.active { display: flex; }
+  .key-badge:hover { background: rgba(42,171,122,0.06); }
 </style>
 </head>
 <body>
+
+<!-- API KEY GATE -->
+<div id="apiKeyGate">
+  <div class="key-card">
+    <div class="logo"><span class="logo-dot"></span>Notus</div>
+    <h2>Enter your Gemini API Key</h2>
+    <p>Notus uses Google Gemini to generate smart notes. Your key is stored only in your browser — never sent anywhere else.</p>
+    <div class="key-steps">
+      1. Go to <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a><br>
+      2. Sign in with your Google account<br>
+      3. Click <strong>"Create API Key"</strong> → copy it<br>
+      4. Paste it below — it's completely free ✓
+    </div>
+    <div class="key-input-wrap">
+      <input type="password" class="key-input" id="apiKeyInput" placeholder="apikey..." onkeydown="if(event.key==='Enter')saveKey()" />
+      <button class="key-submit-btn" onclick="saveKey()">Start →</button>
+    </div>
+    <div class="key-error" id="keyError">Please enter a valid Gemini API key (starts with AIza...)</div>
+    <div class="key-privacy">🔒 Your key is saved in localStorage and never leaves your device.</div>
+  </div>
+</div>
 
 <header>
   <div class="logo">
     <span class="logo-dot"></span>
     Notus
   </div>
-  
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span class="key-badge active" id="keyBadge" onclick="changeKey()" title="Click to change API key">🔑 Gemini Connected</span>
+    <span class="header-tag">AI Study Assistant</span>
+  </div>
 </header>
 
 <div class="app-container">
@@ -1027,6 +1193,59 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 
 let extractedText = '';
 let currentNotes = null;
+let GEMINI_KEY = '';
+
+// ── KEY GATE ──────────────────────────────────────────
+function initKeyGate() {
+  const saved = localStorage.getItem('notus_gemini_key');
+  if (saved) {
+    GEMINI_KEY = saved;
+    document.getElementById('apiKeyGate').style.display = 'none';
+    document.getElementById('keyBadge').classList.add('active');
+  } else {
+    document.getElementById('keyBadge').classList.remove('active');
+  }
+}
+
+function saveKey() {
+  const val = document.getElementById('apiKeyInput').value.trim();
+  const err = document.getElementById('keyError');
+  if (!val || !val.startsWith('AIza')) {
+    err.classList.add('active');
+    return;
+  }
+  err.classList.remove('active');
+  GEMINI_KEY = val;
+  localStorage.setItem('notus_gemini_key', val);
+  document.getElementById('apiKeyGate').style.display = 'none';
+  document.getElementById('keyBadge').classList.add('active');
+}
+
+function changeKey() {
+  if (!confirm('Change your Gemini API key?')) return;
+  localStorage.removeItem('notus_gemini_key');
+  GEMINI_KEY = '';
+  document.getElementById('apiKeyInput').value = '';
+  document.getElementById('apiKeyGate').style.display = 'flex';
+  document.getElementById('keyBadge').classList.remove('active');
+}
+
+async function callGemini(prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 4000, temperature: 0.4 }
+    })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+initKeyGate();
 
 // DRAG & DROP
 const uploadZone = document.getElementById('uploadZone');
@@ -1190,30 +1409,17 @@ Generate a complete JSON response with this EXACT structure:
 Respond with ONLY the JSON, no markdown backticks.`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-
-    const data = await response.json();
-    let raw = data.content.map(b => b.text || '').join('');
-    raw = raw.replace(/```json|```/g, '').trim();
+    const raw_text = await callGemini(prompt);
+    let raw = raw_text.replace(/```json|```/g, '').trim();
 
     // Attempt to fix truncated JSON by closing open structures
     let notes;
     try {
       notes = JSON.parse(raw);
     } catch(parseErr) {
-      // Try to salvage truncated JSON by trimming to last valid closing brace
       const lastBrace = raw.lastIndexOf('}');
       if (lastBrace > 0) {
         let trimmed = raw.substring(0, lastBrace + 1);
-        // Close any unclosed arrays/objects
         const opens = (trimmed.match(/\[/g)||[]).length - (trimmed.match(/\]/g)||[]).length;
         const openBraces = (trimmed.match(/\{/g)||[]).length - (trimmed.match(/\}/g)||[]).length;
         for (let i = 0; i < opens; i++) trimmed += ']';
@@ -1378,23 +1584,11 @@ async function sendChat() {
     : extractedText ? `Document text: ${extractedText.substring(0, 3000)}` : 'No document loaded.';
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 800,
-        messages: [{
-          role: 'user',
-          content: `You are a helpful study assistant. ${context}\n\nStudent question: ${msg}\n\nAnswer clearly and concisely, in 2-4 sentences unless more detail is needed.`
-        }]
-      })
-    });
-    const data = await res.json();
-    const reply = data.content.map(b => b.text || '').join('');
+    const chatPrompt = `You are a helpful study assistant. ${context}\n\nStudent question: ${msg}\n\nAnswer clearly and concisely, in 2-4 sentences unless more detail is needed.`;
+    const reply = await callGemini(chatPrompt);
     document.getElementById('aiTyping').innerHTML = `<strong>Notus AI</strong>${reply}`;
-  } catch {
-    document.getElementById('aiTyping').innerHTML = `<strong>Notus AI</strong>Sorry, I couldn't process that. Please try again.`;
+  } catch (err) {
+    document.getElementById('aiTyping').innerHTML = `<strong>Notus AI</strong>Sorry, I couldn't process that. ${err.message || 'Please try again.'}`;
   }
   messages.scrollTop = messages.scrollHeight;
 }
