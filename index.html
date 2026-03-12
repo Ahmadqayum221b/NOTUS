@@ -1593,8 +1593,8 @@ async function sendChat() {
     : extractedText ? `Document text: ${extractedText.substring(0, 3000)}` : 'No document loaded.';
 
   try {
-    const chatPrompt = `You are a helpful study assistant. ${context}\n\nStudent question: ${msg}\n\nAnswer clearly and concisely, in 2-4 sentences unless more detail is needed.`;
-    const reply = await callAI(chatPrompt);
+    const chatPrompt = `You are a helpful study assistant. ${context}\n\nStudent question: ${msg}\n\nAnswer clearly and in detail. Use plain text only — no JSON, no markdown symbols like ** or ##. Just clear, readable sentences and paragraphs.`;
+    const reply = await callAI(chatPrompt, false);
     document.getElementById('aiTyping').innerHTML = `<strong>Notus AI</strong>${reply}`;
   } catch (err) {
     document.getElementById('aiTyping').innerHTML = `<strong>Notus AI</strong>Sorry, I couldn't process that. ${err.message || 'Please try again.'}`;
